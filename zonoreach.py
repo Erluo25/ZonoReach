@@ -3,8 +3,6 @@ import math
 from copy import deepcopy
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
-import kamenev as kamenev
-
 
 class UnitBox:
     def __init__(self):
@@ -175,7 +173,7 @@ class Reachable_Problem():
             4.3 Add Q_i to the return list
 
         :return: no exact return value. The result will be stored in self.return_list
-        '''
+
 
         # First need to do some initializations
         self.return_list = []
@@ -211,7 +209,9 @@ class Reachable_Problem():
             temp_q = self.bloat(zono=temp_p, radius=beta)
 
             self.return_list.append(temp_q)
+        '''
 
+        self.input_box_to_zono_miu(self.input_mat, self.input_box)
     def get_p0(self):
         '''
         Use the given initial zonotope, create a new Zonotope which extend it to P_0
@@ -267,6 +267,33 @@ class Reachable_Problem():
         else:
             print("There's no zonotope in the return list to plot ")
 
+    def input_box_to_zono_miu(self, b_mat, input_box):
+        '''
+        The input box will have size k * 2
+        k represent the number of inputs u1, u2, ..., uk
+        and 2 means each one has a range
+
+        1. We represent the input_box into a zonotope.
+        2. For each point inside the box / zonotope (which is a k * 1 vector)
+                This function transform a vector in the input domain [u1, u2, ..., uk] telling possible u1 to uk value,
+                into the system domain expressing something like
+                [[u1 + u3], [0.5 * u2 + 3 * u4 - uk], ... <-- n terms corresponding each row of the system --> ]
+                by using the b_mat matrix.
+        3. After that, apply the vector to the matrix A^-1 (e^Ar - I) to form a point in U
+
+        The main idea is apply 2~3 to each point inside the box which is equivalent to apply 2~3 to the whole zonotope
+        '''
+        input_num = input_box.shape[0]
+        center = (np.sum(input_box, axis=1) / 2).reshape(input_num, 1)
+        g_mat_vec = input_box[:, 1].reshape(input_num, 1) - center
+        temp_i = np.identity(n=input_num)
+        g_mat = temp_i * g_mat_vec
+        print(center)
+        print(g_mat)
+
+
+        return
+
 def main():
 
     test1()
@@ -289,10 +316,10 @@ def test1():
                              transform_mat=mat_a, init_zono=init,
                              input_mat=input_mat, input_box=input_box)
     prob.solve(discrete_time=True)
-    prob.plot_result()
-    plt.xlim([-16, 16])
-    plt.ylim([-16, 16])
-    plt.show()
+    #prob.plot_result()
+    #plt.xlim([-16, 16])
+    #plt.ylim([-16, 16])
+    #plt.show()
 
 def test2():
     step_size = 0.02
