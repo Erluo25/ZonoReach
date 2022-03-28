@@ -101,7 +101,6 @@ class Zonotope:
                 dir = np.zeros((1, sys_dim))
                 dir[0][0] = vx
                 dir[0][1] = vy
-                # print(dir)
             else:
                 dir = np.array([[vx, vy]])
             vert = self.domainmax(dir)
@@ -111,8 +110,12 @@ class Zonotope:
         ys = [pt[1] for pt in verts]
         plt.plot(xs, ys, color)
 
-    '''
+    def minkowski_sum(self, zono2):
+        center = self.center + zono2.center
+        g_mat = np.hstack((self.g_mat, zono2.g_mat))
+        return Zonotope(center=center, g_mat=g_mat)
 
+    '''
     def copy(self):
-        return Zonotope(center=self.center, g_mat=
+        return Zonotope(center=self.center, g_mat=self.g_mat)
     '''

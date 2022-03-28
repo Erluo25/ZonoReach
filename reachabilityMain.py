@@ -13,7 +13,7 @@ def main():
 
 def test1():
     step_size = np.pi / 4
-    max_steps = 3
+    max_steps = 4
     # Want to perform the the follow DE
     mat_a = np.array([[0.0, 1.0], [-1.0, 0.0]])
 
@@ -28,10 +28,10 @@ def test1():
                              transform_mat=mat_a, init_zono=init,
                              input_mat=input_mat, input_box=input_box)
     prob.solve(discrete_time=True)
-    #prob.plot_result()
-    #plt.xlim([-16, 16])
-    #plt.ylim([-16, 16])
-    #plt.show()
+    prob.plot_result()
+    plt.xlim([-7, 7])
+    plt.ylim([-7, 7])
+    plt.show()
 
 def test2():
     step_size = 0.02
