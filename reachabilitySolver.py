@@ -3,118 +3,7 @@ import math
 from copy import deepcopy
 import matplotlib.pyplot as plt
 from scipy.linalg import expm
-
-class UnitBox:
-    def __init__(self):
-        pass
-
-    def maximum(self, dir):
-        result = []
-        for val in dir[0]:
-            if val > 0:
-                result.append(1)
-            else:
-                result.append(-1)
-        return np.array([result])
-
-
-class Zonotope:
-
-    def __init__(self, center=None, g_mat=None):
-        self.center = center
-        self.g_mat = g_mat
-        self.g_num = self.g_mat.shape[1]
-        self.domain = UnitBox()
-        self.init_bounds = np.array([[-1, 1] for _ in range(0, self.g_mat.shape[1])])
-        self.bounds_in_all_dim = self.get_bounds()
-
-    '''
-    The purpose of this function is to calculate the upper/lower bound of the zonotope 
-    Return: the max norm value.
-    Reference: https://github.com/stanleybak/quickzonoreach/blob/master/quickzonoreach/zono.py
-    '''
-    def get_bounds(self):
-        mat_t = self.g_mat
-        size = self.center.size
-
-        # pos_1_gens may need to be updated if matrix size changed due to assignment
-        neg1_gens = np.array([[i[0]] for i in self.init_bounds], dtype=float)  # At this time all -1
-        pos1_gens = np.array([[i[1]] for i in self.init_bounds], dtype=float)  # At this time all 1
-
-        pos_mat = np.clip(mat_t, 0, np.inf)
-        neg_mat = np.clip(mat_t, -np.inf, 0)
-
-        pos_pos = np.dot(pos_mat, pos1_gens)
-        neg_neg = np.dot(neg_mat, neg1_gens)
-
-        pos_neg = np.dot(neg_mat, pos1_gens)
-        neg_pos = np.dot(pos_mat, neg1_gens)
-
-        rv = np.zeros((size, 2), dtype=float)
-        dim = self.center.shape[0]
-        rv[:, 0] = np.reshape((self.center + pos_neg + neg_pos), dim)
-        rv[:, 1] = np.reshape((self.center + pos_pos + neg_neg), dim)
-
-        return rv
-
-    def zono_max_norm(self):
-        rv = self.get_bounds()
-        max_val = max(np.linalg.norm(rv[:, 0], ord=np.Inf), np.linalg.norm(rv[:, 1], ord=np.Inf))
-        return max_val
-
-    def zonomax(self, direction):
-        result = self.center
-        for i in range(0, self.g_num):
-            col = self.g_mat[:, [i]]
-            if direction @ col > 0:
-                result = result + col
-            else:
-                result = result - col
-        return result
-
-    def domainmax(self, direction):
-        domain_dir = direction @ self.g_mat
-        domain_pts = self.domain.maximum(domain_dir)
-        result = self.g_mat @ domain_pts.T + self.center
-        return result
-
-    def plot(self, num_dir=100, color='k'):
-        sys_dim = self.g_mat.shape[0]
-        '''
-        if sys_dim > 2:
-            #Need to do some projections
-            temp_b_mat = np.zeros((sys_dim, 2))
-            temp_b_mat[0][0] = 1
-            temp_b_mat[1][1] = 1
-            temp_b_mat = temp_b_mat @ temp_b_mat.T
-            self.center = (temp_b_mat @ self.center)
-            self.g_mat = (temp_b_mat @ self.g_mat)
-            self.g_num = self.g_mat.shape[1]
-        '''
-
-        verts = []
-        for theta in np.linspace(0, 2*np.pi, num_dir):
-            vx = np.cos(theta)
-            vy = np.sin(theta)
-            if sys_dim > 2:
-                dir = np.zeros((1, sys_dim))
-                dir[0][0] = vx
-                dir[0][1] = vy
-                #print(dir)
-            else:
-                dir = np.array([[vx, vy]])
-            vert = self.domainmax(dir)
-            assert np.allclose(vert, self.zonomax(direction=dir))
-            verts.append(vert)
-        xs = [pt[0] for pt in verts]
-        ys = [pt[1] for pt in verts]
-        plt.plot(xs, ys, color)
-
-    '''
-    
-    def copy(self):
-        return Zonotope(center=self.center, g_mat=self.g_mat)
-    '''
+from zonotope import *
 
 class Reachable_Problem():
     '''
@@ -142,6 +31,7 @@ class Reachable_Problem():
         assert (input_mat.shape[0] == self.a_mat.shape[0]) and (input_mat.shape[1] == input_box.shape[0])
         self.input_mat = input_mat
         self.input_box = input_box
+        self.input_num = input_box.shape[0]
         self.dim = transform_mat.shape[0]
         self.return_list = []
 
@@ -191,7 +81,7 @@ class Reachable_Problem():
         print("sup_(x in Z) ||x||", self.init_zono.zono_max_norm())
         print("alpha: ", alpha)
         print("miu ", u)
-        print("beta: ", beta)        
+        print("beta: ", beta)
 
         # Now we need to get the P_0
 
@@ -211,7 +101,7 @@ class Reachable_Problem():
             self.return_list.append(temp_q)
         '''
 
-        self.input_box_to_zono_miu(self.input_mat, self.input_box)
+        self.input_box_to_zono_miu()
     def get_p0(self):
         '''
         Use the given initial zonotope, create a new Zonotope which extend it to P_0
@@ -267,7 +157,7 @@ class Reachable_Problem():
         else:
             print("There's no zonotope in the return list to plot ")
 
-    def input_box_to_zono_miu(self, b_mat, input_box):
+    def input_box_to_zono_miu(self):
         '''
         The input box will have size k * 2
         k represent the number of inputs u1, u2, ..., uk
@@ -283,95 +173,16 @@ class Reachable_Problem():
 
         The main idea is apply 2~3 to each point inside the box which is equivalent to apply 2~3 to the whole zonotope
         '''
-        input_num = input_box.shape[0]
-        center = (np.sum(input_box, axis=1) / 2).reshape(input_num, 1)
-        g_mat_vec = input_box[:, 1].reshape(input_num, 1) - center
-        temp_i = np.identity(n=input_num)
+        input_box = self.input_box
+        a_inv_mat = np.linalg.inv(self.a_mat)
+        trans_mat = a_inv_mat @ ((self.e_r_A_mat - np.identity(self.dim)) @ self.input_mat)
+
+        center = (np.sum(input_box, axis=1) / 2).reshape(self.input_num, 1)
+        g_mat_vec = input_box[:, 1].reshape(self.input_num, 1) - center
+        temp_i = np.identity(n=self.input_num)
         g_mat = temp_i * g_mat_vec
-        print(center)
-        print(g_mat)
-
-
-        return
-
-def main():
-
-    test1()
-
-
-def test1():
-    step_size = np.pi / 4
-    max_steps = 3
-    # Want to perform the the follow DE
-    mat_a = np.array([[0.0, 1.0], [-1.0, 0.0]])
-
-    # Init of x: x in [-5, -4], y in [0, 1]
-    g_mat = np.array([[0.5, 0], [0, 0.5]])
-    center = np.array([[-4.5], [0.5]])
-    init = Zonotope(center, g_mat)
-    # init.plot()
-    input_mat = np.array([[1, 0], [1, 1]])
-    input_box = np.array([[-0.5, 0.5], [-1, 0]])
-    prob = Reachable_Problem(step_size=step_size, step_num=max_steps,
-                             transform_mat=mat_a, init_zono=init,
-                             input_mat=input_mat, input_box=input_box)
-    prob.solve(discrete_time=True)
-    #prob.plot_result()
-    #plt.xlim([-16, 16])
-    #plt.ylim([-16, 16])
-    #plt.show()
-
-def test2():
-    step_size = 0.02
-    max_steps = 100
-    # Want to perform the the follow DE
-    mat_a = np.array([[-1.0, -4.0], [4, -1.0]])
-
-    # Init of x: x in [0.9, 1.1], y in [-0.1, 0.1]
-    g_mat = np.array([[0.1, 0], [0, 0.1]])
-    center = np.array([[1.0], [0.0]])
-    init = Zonotope(center, g_mat)
-    # init.plot()
-    input_mat = np.array([[1, 0], [1, 0]])
-    input_box = np.array([[-0.05, 0.05], [0.0, 0.0]])
-    prob = Reachable_Problem(step_size=step_size, step_num=max_steps,
-                             transform_mat=mat_a, init_zono=init,
-                             input_mat=input_mat, input_box=input_box)
-    prob.solve()
-    prob.plot_result()
-    plt.xlim([-0.8, 1.2])
-    plt.ylim([-0.6, 1.0])
-    plt.show()
-
-
-def test3():
-    step_size = 0.005
-    max_steps = 10
-    # Want to perform the the follow DE
-    mat_a = np.array([[-1.0, -4.0, 0.0, 0.0, 0.0],
-                      [4.0, -1.0, 0.0, 0.0, 0.0],
-                      [0.0, 0.0, -3.0, 1.0, 0.0],
-                      [0.0, 0.0, -1.0, -3.0, 0.0],
-                      [0.0, 0.0, 0.0, 0.0, -2.0]])
-
-    # Init of x: x in [0.9, 1.1], y in [-0.1, 0.1]
-    g_mat = np.array([[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]])
-    center = np.array([[1.0], [0.0], [0.0], [0.0], [0.0]])
-    init = Zonotope(center, g_mat)
-    # init.plot()
-    input_mat = np.array([[1, 0], [1, 0], [1, 0], [1, 0], [1, 0]])
-    input_box = np.array([[-0.01, 0.01], [0.0, 0.0]])
-    prob = Reachable_Problem(step_size=step_size, step_num=max_steps,
-                             transform_mat=mat_a, init_zono=init,
-                             input_mat=input_mat, input_box=input_box)
-    prob.solve()
-    #print(len(prob.return_list))
-    prob.plot_result()
-    #plt.xlim([-1, 1.5])
-    #plt.ylim([-1, 1])
-    plt.show()
-
-
-if __name__ == '__main__':
-    main()
-
+        center = trans_mat @ center
+        g_mat = trans_mat @ g_mat
+        zono_miu = Zonotope(center=center, g_mat=g_mat)
+        print(center, g_mat)
+        return zono_miu
